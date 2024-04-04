@@ -17,19 +17,19 @@ function FriendBar({ user, tableChat, onRoom, userAktif }) {
     )
 }
 
-export default function () {
+export default function ({ nameUser, onUser }) {
     const [friends, setFriends] = useState([])
     const [chatRoom, setChatRoom] = useState([])
     const [userAktif, setUserAktif] = useState({ before: "", now: "" })
-    const [cekAddFriend, setCekAddFriend] = useState(false)
     const massage = useRef("")
+    const findRoom = useRef("")
 
     function handlerRoom(nameTable) {
         setUserAktif(user => {
             return { before: user.now, now: nameTable }
         })
 
-        socket.emit('rooms', userAktif.before, nameTable, (res) => {
+        socket.emit('rooms', user, userAktif.before, nameTable, (res) => {
             setChatRoom(res)
         });
     }
@@ -41,6 +41,17 @@ export default function () {
                 massage.current.value = ""
             });
         }
+    }
+
+    function handlerFriend() {
+        socket.emit('findFriend', user, findRoom.current.value, (res) => {
+            if (res[0]) {
+                handlerRoom(res[0].username)
+                findRoom.current.value = ""
+                findRoom.current.classList.toggle("hidden")
+                // document.getElementById("findFriend").classList.toggle("hidden")
+            }
+        })
     }
 
     useEffect(() => {
@@ -68,7 +79,7 @@ export default function () {
                 <div className="flex h-32 p-6 items-center bg-cyan-600 text-white">
                     <img className="h-full object-contain rounded-full" src="user.jpg" alt="" />
                     <div className="ml-6">
-                        <h1 className="font-body text-2xl mb-3 font-bold">JOKO</h1>
+                        <h1 className="font-body text-2xl mb-3 font-bold">{user.toUpperCase()}</h1>
                         <div className="flex items-center font-body gap-2">
                             <i className="fi fi-rr-clock-three text-sm"></i>
                             <h5>Aktif</h5>
@@ -79,16 +90,24 @@ export default function () {
                         location.replace("/login")
                     }}></i>
                 </div>
-                <button className="text-center w-full py-2 font-title bg-cyan-800 shadow-lg text-white">
+                <button onClick={() => document.getElementById("findFriend").classList.toggle("hidden")} className="text-center w-full py-2 font-title bg-cyan-800 shadow-lg text-white">
                     FIND FRIEND
                 </button>
+                <div id="findFriend" className="flex absolute hidden">
+                    <input ref={findRoom} type="text" className="w-full border-2 px-3" />
+                    <button onClick={handlerFriend} className="px-5 py-3 border-2"><i className="fi fi-rr-arrow-small-right"></i></button>
+                </div>
                 <div className="overflow-y-scroll h-4/5">
                     {friends.map((index, e) => {
                         return (
                             <li key={e}>
-                                <FriendBar user={index.user2} tableChat={index.table_chat} onRoom={handlerRoom} userAktif={userAktif.now} />
+                                {/* <FriendBar user={index.user2} tableChat={index.table_chat} onRoom={handlerRoom} userAktif={userAktif.now} /> */}
+                                <button onClick={() => handlerRoom(index.table_chat)} className={`w-full flex h-20 py-4 px-6 items-center gap-6 font-title hover:bg-cyan-50 duration-300 ${userAktif.now == index.table_chat ? "bg-cyan-50" : "bg-white"}`}>
+                                    <img className="h-full object-contain rounded-full" src="user.jpg" alt="" />
+                                    <h5>{index.user2.toUpperCase()}</h5>
+                                </button>
+                                <hr />
                             </li>
-
                         )
                     })}
 
