@@ -5,6 +5,9 @@ const http = require("http");
 const server = http.createServer(app);
 const { Server } = require("socket.io");
 const mysql = require("mysql");
+const { error } = require("console");
+const { resolve } = require("path");
+const { rejects } = require("assert");
 const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(
@@ -22,9 +25,54 @@ var db = mysql.createConnection({
   database: "db_chatapp",
 });
 
-async function checkTableExists(table) {
+async function loginUsers(user, pass) {
   return new Promise((resolve, reject) => {
-    db.query(`SELECT * FROM ${table}`, (err, result) => {
+    db.query(
+      `SELECT * FROM users WHERE username = "${user}" AND password = "${pass}"`,
+      function (err, result, fields) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(result);
+        }
+      }
+    );
+  });
+}
+
+async function registedUsers(user, pass) {
+  return new Promise((resolve, reject) => {
+    db.query(
+      `INSERT INTO users (id_user, username, password) VALUES (NULL, '${user}', '${pass}')`,
+      function (err, result, fields) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(result);
+        }
+      }
+    );
+  });
+}
+
+async function friendUsers(user) {
+  return new Promise((resolve, reject) => {
+    db.query(
+      `SELECT * FROM chat WHERE user1 = "${user}" OR user2 = "${user}"`,
+      function (err, result, fields) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(result);
+        }
+      }
+    );
+  });
+}
+
+async function getTable(table) {
+  return new Promise((resolve, reject) => {
+    db.query(`SELECT * FROM ${table} ORDER BY tanggal DESC`, (err, result) => {
       if (err) {
         reject(err);
       } else {
@@ -34,11 +82,26 @@ async function checkTableExists(table) {
   });
 }
 
+async function getUsers(user, friend) {
+  return new Promise((resolve, reject) => {
+    db.query(
+      `SELECT * FROM users WHERE username = "${friend}" AND username != "${user}"`,
+      function (err, result) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(result);
+        }
+      }
+    );
+  });
+}
+
 async function createTable(user1, user2) {
   return new Promise((resolve, reject) => {
     db.query(
       `INSERT INTO chat (user1, user2, table_chat) VALUES (?, ?, ?)`,
-      [user1, user2, user1+user2],
+      [user1, user2, user1 + user2],
       (err, result) => {
         if (err) {
           reject(err);
@@ -59,49 +122,81 @@ async function createTable(user1, user2) {
   });
 }
 
-io.on("connection", (socket) => {
-  socket.on("login", (user, pass, back) => {
+// Fungsi async untuk menyisipkan pesan ke dalam tabel chat
+async function insertChat(user, msg, tableChat) {
+  return new Promise((resolve, reject) => {
     db.query(
-      `SELECT * FROM users WHERE username = "${user}" AND password = "${pass}"`,
+      `INSERT INTO ${tableChat} (user, text, tanggal) VALUES (?, ?, current_timestamp())`,
+      [user, msg],
       function (err, result, fields) {
-        if (result[0]) {
-          back({
-            status: result[0].username,
-          });
+        if (err) {
+          reject(err);
         } else {
-          back({
-            status: "null",
-          });
+          resolve(result);
         }
       }
     );
   });
+}
 
-  socket.on("registed", (user, pass, back) => {
+// Fungsi async untuk mendapatkan data chat terbaru dari tabel chat
+async function getLatestChats(tableChat) {
+  return new Promise((resolve, reject) => {
     db.query(
-      `INSERT INTO users (id_user, username, password) VALUES (NULL, '${user}', '${pass}')`,
+      `SELECT * FROM ${tableChat} ORDER BY tanggal DESC`,
       function (err, result, fields) {
-        back(result);
+        if (err) {
+          reject(err);
+        } else {
+          resolve(result);
+        }
       }
     );
   });
+}
 
-  socket.on("friend", (user, back) => {
-    db.query(
-      `SELECT * FROM chat WHERE user1 = "${user}" OR user2 = "${user}"`,
-      function (err, result, fields) {
-        back(result);
-      }
-    );
+io.on("connection", (socket) => {
+  socket.on("login", async (user, pass, back) => {
+    try {
+      const result = await loginUsers(user, pass);
+      back(result);
+    } catch (error) {
+      console.error(error);
+    }
   });
 
-  socket.on("findFriend", (user, friend, back) => {
-    db.query(
-      `SELECT * FROM users WHERE username = "${friend}" AND username != "${user}"`,
-      function (err, result, fields) {
-        back(result);
+  socket.on("registed", async (user, pass, back) => {
+    try {
+      const result = await registedUsers(user, pass);
+      back(result);
+    } catch (error) {
+      console.error(error);
+    }
+  });
+
+  socket.on("friend", async (user, back) => {
+    try {
+      const result = await friendUsers(user);
+      back(result);
+    } catch (error) {
+      console.error(error);
+    }
+  });
+
+  socket.on("findFriend", async (user, friend, back) => {
+    try {
+      const result = await getUsers(user, friend);
+      
+      if (result.length) {
+        await createTable(user , friend)
+        back(true)
+        return
       }
-    );
+
+      back(false)
+    } catch (err) {
+      console.error(error);
+    }
   });
 
   socket.on("rooms", async (user, tableBefore, tableChat, back) => {
@@ -109,67 +204,24 @@ io.on("connection", (socket) => {
 
     socket.join(tableChat);
 
-    // db.query(
-    //   `SELECT * FROM ${tableChat} ORDER BY tanggal DESC`,
-    //   function (err, result, fields) {
-    //     if (result != null) {
-    //       console.log(result)
-    //       back(result);
-    //     } else {
-    //       db.query(
-    //         `INSERT INTO chat (user1, user2, table_chat) VALUES ('${user}', '${tableChat}', '${user}${tableChat}')`,
-    //         function (err, result, fields) {
-    //           db.query(
-    //             `CREATE TABLE ${user}${tableChat} (user VARCHAR(12) NOT NULL ,
-    //           text TEXT NOT NULL ,
-    //            tanggal DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-    //            )`,
-    //             function (err, result, fields) {
-    //               console.log(tableChat + " done");
-    //             }
-    //           );
-    //         }
-    //       );
-    //     }
-    //   }
-    // );
-    let result
     try {
-      result = await checkTableExists(tableChat);
+      const result = await getTable(tableChat);
       back(result);
     } catch (error) {
       console.error(error.code);
-      await createTable(user , tableChat)
-      result = await checkTableExists(user+tableChat)
-      back(result)
     }
   });
 
-  socket.on("sendChat", (user, msg, tableChat, back) => {
-    db.query(
-      `INSERT INTO ${tableChat} (user, text, tanggal) VALUES ('${user}', '${msg}', current_timestamp())`,
-      function (err, result, fields) {
-        db.query(
-          `SELECT * FROM ${tableChat} ORDER BY tanggal DESC`,
-          function (err, result, fields) {
-            back(result);
-            socket.to(tableChat).emit("reciveChat", result);
-          }
-        );
-      }
-    );
-  });
+  socket.on("sendChat", async (user, msg, tableChat, back) => {
+    try {
+      await insertChat(user, msg, tableChat);
 
-  socket.on("join_room", (data) => {
-    socket.join(data);
-  });
-
-  socket.on("send_message", (data) => {
-    socket.leave(data.kamar);
-    socket.join(data.kamar);
-    console.log(data.lel);
-    console.log(socket.rooms);
-    socket.to(data.kamar).emit("receive_message", data);
+      const latestChats = await getLatestChats(tableChat);
+      back(latestChats);
+      socket.to(tableChat).emit("reciveChat", latestChats);
+    } catch (error) {
+      console.error(error);
+    }
   });
 });
 

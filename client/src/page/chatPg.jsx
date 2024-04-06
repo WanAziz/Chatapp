@@ -44,14 +44,22 @@ export default function ({ nameUser, onUser }) {
     }
 
     function handlerFriend() {
-        socket.emit('findFriend', user, findRoom.current.value, (res) => {
-            if (res[0]) {
-                handlerRoom(res[0].username)
-                findRoom.current.value = ""
-                findRoom.current.classList.toggle("hidden")
-                // document.getElementById("findFriend").classList.toggle("hidden")
+        socket.emit('findFriend', user, findRoom.current.firstChild.value, (res) => {
+            if (res) {
+                socket.emit('friend', user, (res) => {
+                    const friendArr = res.map((index) => {
+                        if (index.user1 != user) {
+                            return { user1: index.user2, user2: index.user1, table_chat: index.table_chat }
+                        }
+                        return index
+                    })
+                    setFriends(friendArr)
+                });
             }
         })
+
+        findRoom.current.firstChild.value = ""
+        findRoom.current.classList.toggle("hidden")
     }
 
     useEffect(() => {
@@ -64,9 +72,7 @@ export default function ({ nameUser, onUser }) {
             })
             setFriends(friendArr)
         });
-    }, []);
 
-    useEffect(() => {
         socket.on("reciveChat", (data) => {
             //   setMessageReceived(data.message);
             setChatRoom(data)
@@ -93,8 +99,8 @@ export default function ({ nameUser, onUser }) {
                 <button onClick={() => document.getElementById("findFriend").classList.toggle("hidden")} className="text-center w-full py-2 font-title bg-cyan-800 shadow-lg text-white">
                     FIND FRIEND
                 </button>
-                <div id="findFriend" className="flex absolute hidden">
-                    <input ref={findRoom} type="text" className="w-full border-2 px-3" />
+                <div ref={findRoom} id="findFriend" className="flex absolute hidden">
+                    <input type="text" className="w-full border-2 px-3" />
                     <button onClick={handlerFriend} className="px-5 py-3 border-2"><i className="fi fi-rr-arrow-small-right"></i></button>
                 </div>
                 <div className="overflow-y-scroll h-4/5">

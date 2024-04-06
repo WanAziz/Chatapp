@@ -1,8 +1,8 @@
 import { io } from "socket.io-client"
+
 const socket = io("http://localhost:5174")
 
 export default function () {
-    console.log(sessionStorage.getItem("user"))
     function handlerLogin(e) {
         e.preventDefault();
 
@@ -11,8 +11,12 @@ export default function () {
         const formJson = Object.fromEntries(formData.entries())
 
         socket.emit('login', formJson.username, formJson.password, (res) => {
-            if (res.status != "null") {
-                sessionStorage.setItem("user", res.status)
+            // if (res.status != "null") {
+            //     sessionStorage.setItem("user", res.status)
+            //     location.replace("/chats")
+            // }
+            if (res.length){
+                sessionStorage.setItem("user", res[0].username)
                 location.replace("/chats")
             }
         });

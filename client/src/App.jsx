@@ -1,10 +1,10 @@
 
 import './App.css'
-import { useState } from 'react'
+import { useState , lazy} from 'react'
 import { Routes, Route ,Navigate } from "react-router-dom"
-import LoginPage from "./page/loginPg"
-import RegisterPage from './page/registerPg'
-import ChatPage from './page/chatPg'
+const LoginPage = lazy(()=> import("./page/loginPg")) 
+const RegisterPage = lazy(() => import('./page/registerPg'))  
+const ChatPage = lazy(() => import('./page/chatPg')) 
 
 export default function App() {
   const user = sessionStorage.getItem("user")
